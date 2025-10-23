@@ -1,0 +1,49 @@
+/*
+Bulk Insert into  CRM CUST INFO table:
+We are using Alter table and try convert functions because we got errors trying to load the data from the source file.
+*/
+ALTER TABLE bronze.crm_cust_info
+ALTER COLUMN cst_create_date NVARCHAR(20);
+
+BULK INSERT bronze.crm_cust_info
+FROM 'C:\path\file.csv'
+WITH (
+    FIRSTROW = 2,
+    FIELDTERMINATOR = ',',
+    ROWTERMINATOR = '\n'
+);
+
+UPDATE bronze.crm_cust_info
+SET cst_create_date = TRY_CONVERT(DATE, cst_create_date, 105);
+
+ALTER TABLE bronze.crm_cust_info
+ALTER COLUMN cst_create_date DATE;
+
+--Bulk Insert into  CRM PRD INFO table:
+ALTER TABLE bronze.crm_prd_info
+ALTER COLUMN prd_end_dt NVARCHAR(20);
+
+BULK INSERT bronze.crm_prd_info
+FROM 'C:\Users\kpurn\OneDrive\Documents\Development\SQL\SQL Project\sql-data-warehouse-project\sql-data-warehouse-project\datasets\source_crm\prd_info.csv'
+WITH (
+    FIRSTROW = 2,
+    FIELDTERMINATOR = ',',
+    ROWTERMINATOR = '\n'
+);
+
+UPDATE bronze.crm_prd_info
+SET prd_end_dt = TRY_CONVERT(DATE, prd_end_dt, 105);
+
+ALTER TABLE bronze.crm_prd_info
+ALTER COLUMN prd_end_dt DATE;
+
+SELECT count(*) FROM bronze.crm_prd_info;
+
+--Bulk Insert into  CRM Sales details table:
+BULK INSERT bronze.crm_sales_details
+FROM 'C:\Users\kpurn\OneDrive\Documents\Development\SQL\SQL Project\sql-data-warehouse-project\sql-data-warehouse-project\datasets\source_crm\sales_details.csv'
+WITH (
+    FIRSTROW = 2,
+    FIELDTERMINATOR = ',',
+    ROWTERMINATOR = '\n'
+);

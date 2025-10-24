@@ -1,7 +1,18 @@
 CREATE OR ALTER PROCEDURE bronze.load_bronze AS
 BEGIN
+    PRINT '================================================';
+	PRINT 'Loading Bronze Layer';
+	PRINT '================================================';
+
+  	PRINT '------------------------------------------------';
+	PRINT 'Loading CRM Tables';
+	PRINT '------------------------------------------------';
+
+    --Bulk Insert into  CRM CUST INFO table:
+    PRINT '>> Truncating Table: bronze.crm_cust_info';
+	TRUNCATE TABLE bronze.crm_cust_info;
+	PRINT '>> Inserting Data Into: bronze.crm_cust_info';
 	/*
-    Bulk Insert into  CRM CUST INFO table:
     We are using Alter table and try convert functions because we got errors trying to load the data from the source file.
     */
     ALTER TABLE bronze.crm_cust_info
@@ -21,7 +32,13 @@ BEGIN
     ALTER TABLE bronze.crm_cust_info
     ALTER COLUMN cst_create_date DATE;
 
+    PRINT '>> -------------';
+
     --Bulk Insert into  CRM PRD INFO table:
+    PRINT '>> Truncating Table: bronze.crm_prd_info';
+	TRUNCATE TABLE bronze.crm_prd_info;
+    PRINT '>> Inserting Data Into: bronze.crm_prd_info';
+
     ALTER TABLE bronze.crm_prd_info
     ALTER COLUMN prd_end_dt NVARCHAR(20);
 
@@ -41,7 +58,13 @@ BEGIN
 
     SELECT count(*) FROM bronze.crm_prd_info;
 
+    PRINT '>> -------------';
+
     --Bulk Insert into  CRM Sales details table:
+    PRINT '>> Truncating Table: bronze.crm_sales_details';
+	TRUNCATE TABLE bronze.crm_sales_details;
+	PRINT '>> Inserting Data Into: bronze.crm_sales_details';
+
     BULK INSERT bronze.crm_sales_details
     FROM 'C:\Users\kpurn\OneDrive\Documents\Development\SQL\SQL Project\sql-data-warehouse-project\sql-data-warehouse-project\datasets\source_crm\sales_details.csv'
     WITH (
@@ -49,9 +72,18 @@ BEGIN
         FIELDTERMINATOR = ',',
         ROWTERMINATOR = '\n'
     );
+    PRINT '>> -------------';
 
+
+    PRINT '------------------------------------------------';
+	PRINT 'Loading ERP Tables';
+	PRINT '------------------------------------------------';
 
     --Bulk Insert into ERP CUST AZ12
+    PRINT '>> Truncating Table: bronze.erp_cust_az12';
+	TRUNCATE TABLE bronze.erp_cust_az12;
+	PRINT '>> Inserting Data Into: bronze.erp_cust_az12';
+
     ALTER TABLE bronze.erp_cust_az12
     ALTER COLUMN bdate NVARCHAR(20);
 
@@ -70,8 +102,12 @@ BEGIN
     ALTER COLUMN bdate DATE;
 
     SELECT count(*) FROM bronze.erp_cust_az12;
+    PRINT '>> -------------';
 
     --Bulk Insert into ERP LOC A101
+    PRINT '>> Truncating Table: bronze.erp_loc_a101';
+	TRUNCATE TABLE bronze.erp_loc_a101;
+	PRINT '>> Inserting Data Into: bronze.erp_loc_a101';
 
     BULK INSERT bronze.erp_loc_a101
     FROM 'C:\Users\kpurn\OneDrive\Documents\Development\SQL\SQL Project\sql-data-warehouse-project\sql-data-warehouse-project\datasets\source_erp\loc_a101.csv'
@@ -80,9 +116,13 @@ BEGIN
         FIELDTERMINATOR = ',',
         ROWTERMINATOR = '\n'
     );
+    PRINT '>> -------------';
 
 
     --Bulk Insert into ERP PX CAT G1V2
+    PRINT '>> Truncating Table: bronze.erp_px_cat_g1v2';
+	TRUNCATE TABLE bronze.erp_px_cat_g1v2;
+	PRINT '>> Inserting Data Into: bronze.erp_px_cat_g1v2';
 
     BULK INSERT bronze.erp_px_cat_g1v2
     FROM 'C:\Users\kpurn\OneDrive\Documents\Development\SQL\SQL Project\sql-data-warehouse-project\sql-data-warehouse-project\datasets\source_erp\px_cat_g1v2.csv'
@@ -91,4 +131,10 @@ BEGIN
         FIELDTERMINATOR = ',',
         ROWTERMINATOR = '\n'
     );
+    PRINT '>> -------------';
+
+    PRINT '=========================================='
+		PRINT 'Loading Bronze Layer is Completed';
+		PRINT '=========================================='
+
 END

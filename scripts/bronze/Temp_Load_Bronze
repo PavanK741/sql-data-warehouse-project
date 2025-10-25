@@ -1,171 +1,263 @@
+/*
+===============================================================================
+Stored Procedure: Load Bronze Layer (Source -> Bronze)
+===============================================================================
+Purpose:
+    - Loads all source CSVs into the bronze schema.
+    - Handles invalid or missing data safely using TRY_CONVERT().
+    - Prints detailed, structured progress logs for each step.
+    - Designed for reliability, readability, and maintainability.
+
+Notes for Future Improvement:
+    ---------------------------------------------------------------------------
+    Using ERRORFILE (optional enhancement)
+    ---------------------------------------------------------------------------
+    In BULK INSERT, you can specify an ERRORFILE to capture failed rows:
+        ERRORFILE = 'C:\sql\dwh_project\datasets\errors\crm_cust_info_error'
+    SQL Server will automatically create:
+        - crm_cust_info_error.Error.Txt (failed rows)
+        - crm_cust_info_error.Txt (context info)
+    Advantages:
+        - Keeps valid rows even if some are malformed.
+        - Simplifies debugging and data quality review.
+    Requirements:
+        - The folder must exist.
+        - The SQL Server service account must have write permissions.
+    Example base folder:
+        C:\sql\dwh_project\datasets\errors\
+    ---------------------------------------------------------------------------
+
+Usage:
+    EXEC bronze.load_bronze;
+===============================================================================
+*/
 CREATE OR ALTER PROCEDURE bronze.load_bronze AS
 BEGIN
-    DECLARE @start_time DATETIME, @end_time DATETIME, @batch_start_time DATETIME, @batch_end_time DATETIME;
+    DECLARE 
+        @start_time DATETIME, 
+        @end_time DATETIME, 
+        @batch_start_time DATETIME, 
+        @batch_end_time DATETIME;
+
     BEGIN TRY
         SET @batch_start_time = GETDATE();
         PRINT '================================================';
-	    PRINT 'Loading Bronze Layer';
-	    PRINT '================================================';
+        PRINT 'Starting Bronze Layer Load';
+        PRINT '================================================';
+        PRINT '';
+        PRINT 'Batch Start Time: ' + CONVERT(VARCHAR, @batch_start_time, 120);
+        PRINT '';
 
-  	    PRINT '------------------------------------------------';
-	    PRINT 'Loading CRM Tables';
-	    PRINT '------------------------------------------------';
+        ------------------------------------------------
+        -- PHASE 1: LOADING CRM TABLES
+        ------------------------------------------------
+        PRINT '------------------------------------------------';
+        PRINT 'PHASE 1: LOADING CRM TABLES';
+        PRINT '------------------------------------------------';
 
-        --Bulk Insert into  CRM CUST INFO table:
+        -------------------------
+        -- bronze.crm_cust_info
+        -------------------------
+        PRINT 'Step 1: Loading CRM Customer Info Table...';
         SET @start_time = GETDATE();
-        PRINT '>> Truncating Table: bronze.crm_cust_info';
-	    TRUNCATE TABLE bronze.crm_cust_info;
-	    PRINT '>> Inserting Data Into: bronze.crm_cust_info';
-	    /*
-        We are using Alter table and try convert functions because we got errors trying to load the data from the source file.
-        */
-        ALTER TABLE bronze.crm_cust_info
-        ALTER COLUMN cst_create_date NVARCHAR(20);
+
+        TRUNCATE TABLE bronze.crm_cust_info;
+        ALTER TABLE bronze.crm_cust_info ALTER COLUMN cst_create_date NVARCHAR(20);
 
         BULK INSERT bronze.crm_cust_info
         FROM 'C:\Users\kpurn\OneDrive\Documents\Development\SQL\SQL Project\sql-data-warehouse-project\sql-data-warehouse-project\datasets\source_crm\cust_info.csv'
         WITH (
             FIRSTROW = 2,
             FIELDTERMINATOR = ',',
-            ROWTERMINATOR = '\n'
+            ROWTERMINATOR = '\n',
+            KEEPNULLS,
+            MAXERRORS = 1000,
+            TABLOCK
         );
 
+        /* 
+           SET NOCOUNT prevents SQL Server from printing "(xxxx rows affected)" messages.
+           We enable it here to suppress duplicate row count outputs from the UPDATE statement.
+           BULK INSERT already prints one row count, so this keeps the console output clean.
+        */
+        SET NOCOUNT ON;
         UPDATE bronze.crm_cust_info
         SET cst_create_date = TRY_CONVERT(DATE, cst_create_date, 105);
+        SET NOCOUNT OFF;
 
-        ALTER TABLE bronze.crm_cust_info
-        ALTER COLUMN cst_create_date DATE;
+        ALTER TABLE bronze.crm_cust_info ALTER COLUMN cst_create_date DATE;
         SET @end_time = GETDATE();
-        PRINT '>> Load Duration: ' + CAST(DATEDIFF(second, @start_time, @end_time) AS NVARCHAR) + ' Seconds ';
-        PRINT '>> -------------';
 
-        --Bulk Insert into  CRM PRD INFO table:
+        PRINT 'CRM Customer Info loaded successfully in ' 
+              + CAST(DATEDIFF(second, @start_time, @end_time) AS NVARCHAR) + ' sec.';
+        PRINT '';
+
+        -------------------------
+        -- bronze.crm_prd_info
+        -------------------------
+        PRINT 'Step 2: Loading CRM Product Info Table...';
         SET @start_time = GETDATE();
-        PRINT '>> Truncating Table: bronze.crm_prd_info';
-	    TRUNCATE TABLE bronze.crm_prd_info;
-        PRINT '>> Inserting Data Into: bronze.crm_prd_info';
 
-        ALTER TABLE bronze.crm_prd_info
-        ALTER COLUMN prd_end_dt NVARCHAR(20);
+        TRUNCATE TABLE bronze.crm_prd_info;
+        ALTER TABLE bronze.crm_prd_info ALTER COLUMN prd_end_dt NVARCHAR(20);
 
         BULK INSERT bronze.crm_prd_info
         FROM 'C:\Users\kpurn\OneDrive\Documents\Development\SQL\SQL Project\sql-data-warehouse-project\sql-data-warehouse-project\datasets\source_crm\prd_info.csv'
         WITH (
             FIRSTROW = 2,
             FIELDTERMINATOR = ',',
-            ROWTERMINATOR = '\n'
+            ROWTERMINATOR = '\n',
+            KEEPNULLS,
+            MAXERRORS = 1000,
+            TABLOCK
         );
 
+        SET NOCOUNT ON;
         UPDATE bronze.crm_prd_info
         SET prd_end_dt = TRY_CONVERT(DATE, prd_end_dt, 105);
+        SET NOCOUNT OFF;
 
-        ALTER TABLE bronze.crm_prd_info
-        ALTER COLUMN prd_end_dt DATE;
-
-        SELECT count(*) FROM bronze.crm_prd_info;
+        ALTER TABLE bronze.crm_prd_info ALTER COLUMN prd_end_dt DATE;
         SET @end_time = GETDATE();
-        PRINT '>> Load Duration: ' + CAST(DATEDIFF(second, @start_time, @end_time) AS NVARCHAR) + ' Seconds ';
-        PRINT '>> -------------';
 
-        --Bulk Insert into  CRM Sales details table:
+        PRINT 'CRM Product Info loaded successfully in ' 
+              + CAST(DATEDIFF(second, @start_time, @end_time) AS NVARCHAR) + ' sec.';
+        PRINT '';
+
+        -------------------------
+        -- bronze.crm_sales_details
+        -------------------------
+        PRINT 'Step 3: Loading CRM Sales Details Table...';
         SET @start_time = GETDATE();
-        PRINT '>> Truncating Table: bronze.crm_sales_details';
-	    TRUNCATE TABLE bronze.crm_sales_details;
-	    PRINT '>> Inserting Data Into: bronze.crm_sales_details';
+
+        TRUNCATE TABLE bronze.crm_sales_details;
 
         BULK INSERT bronze.crm_sales_details
         FROM 'C:\Users\kpurn\OneDrive\Documents\Development\SQL\SQL Project\sql-data-warehouse-project\sql-data-warehouse-project\datasets\source_crm\sales_details.csv'
         WITH (
             FIRSTROW = 2,
             FIELDTERMINATOR = ',',
-            ROWTERMINATOR = '\n'
+            ROWTERMINATOR = '\n',
+            KEEPNULLS,
+            MAXERRORS = 1000,
+            TABLOCK
         );
+
         SET @end_time = GETDATE();
-        PRINT '>> Load Duration: ' + CAST(DATEDIFF(second, @start_time, @end_time) AS NVARCHAR) + ' Seconds ';
-        PRINT '>> -------------';
+        PRINT 'CRM Sales Details loaded successfully in ' 
+              + CAST(DATEDIFF(second, @start_time, @end_time) AS NVARCHAR) + ' sec.';
+        PRINT '';
 
-
+        ------------------------------------------------
+        -- PHASE 2: LOADING ERP TABLES
+        ------------------------------------------------
         PRINT '------------------------------------------------';
-	    PRINT 'Loading ERP Tables';
-	    PRINT '------------------------------------------------';
+        PRINT 'PHASE 2: LOADING ERP TABLES';
+        PRINT '------------------------------------------------';
 
-        --Bulk Insert into ERP CUST AZ12
+        -------------------------
+        -- bronze.erp_cust_az12
+        -------------------------
+        PRINT 'Step 4: Loading ERP Customer AZ12 Table...';
         SET @start_time = GETDATE();
-        PRINT '>> Truncating Table: bronze.erp_cust_az12';
-	    TRUNCATE TABLE bronze.erp_cust_az12;
-	    PRINT '>> Inserting Data Into: bronze.erp_cust_az12';
 
-        ALTER TABLE bronze.erp_cust_az12
-        ALTER COLUMN bdate NVARCHAR(20);
+        TRUNCATE TABLE bronze.erp_cust_az12;
+        ALTER TABLE bronze.erp_cust_az12 ALTER COLUMN bdate NVARCHAR(20);
 
         BULK INSERT bronze.erp_cust_az12
-        FROM 'C:\Users\kpurn\OneDrive\Documents\Development\SQL\SQL Project\sql-data-warehouse-project\sql-data-warehouse-project\datasets\source_erp\CUST_AZ12.csv'
+        FROM 'C:\Users\kpurn\OneDrive\Documents\Development\SQL\SQL Project\sql-data-warehouse-project\sql-data-warehouse-project\datasets\source_erp\cust_az12.csv'
         WITH (
             FIRSTROW = 2,
             FIELDTERMINATOR = ',',
-            ROWTERMINATOR = '\n'
+            ROWTERMINATOR = '\n',
+            KEEPNULLS,
+            MAXERRORS = 1000,
+            TABLOCK
         );
 
+        SET NOCOUNT ON;
         UPDATE bronze.erp_cust_az12
         SET bdate = TRY_CONVERT(DATE, bdate, 105);
+        SET NOCOUNT OFF;
 
-        ALTER TABLE bronze.erp_cust_az12
-        ALTER COLUMN bdate DATE;
-
-        SELECT count(*) FROM bronze.erp_cust_az12;
+        ALTER TABLE bronze.erp_cust_az12 ALTER COLUMN bdate DATE;
         SET @end_time = GETDATE();
-        PRINT '>> Load Duration: ' + CAST(DATEDIFF(second, @start_time, @end_time) AS NVARCHAR) + ' Seconds ';
-        PRINT '>> -------------';
 
-        --Bulk Insert into ERP LOC A101
+        PRINT 'ERP Customer AZ12 loaded successfully in ' 
+              + CAST(DATEDIFF(second, @start_time, @end_time) AS NVARCHAR) + ' sec.';
+        PRINT '';
+
+        -------------------------
+        -- bronze.erp_loc_a101
+        -------------------------
+        PRINT 'Step 5: Loading ERP Location A101 Table...';
         SET @start_time = GETDATE();
-        PRINT '>> Truncating Table: bronze.erp_loc_a101';
-	    TRUNCATE TABLE bronze.erp_loc_a101;
-	    PRINT '>> Inserting Data Into: bronze.erp_loc_a101';
+
+        TRUNCATE TABLE bronze.erp_loc_a101;
 
         BULK INSERT bronze.erp_loc_a101
         FROM 'C:\Users\kpurn\OneDrive\Documents\Development\SQL\SQL Project\sql-data-warehouse-project\sql-data-warehouse-project\datasets\source_erp\loc_a101.csv'
         WITH (
             FIRSTROW = 2,
             FIELDTERMINATOR = ',',
-            ROWTERMINATOR = '\n'
+            ROWTERMINATOR = '\n',
+            KEEPNULLS,
+            MAXERRORS = 1000,
+            TABLOCK
         );
+
         SET @end_time = GETDATE();
-        PRINT '>> Load Duration: ' + CAST(DATEDIFF(second, @start_time, @end_time) AS NVARCHAR) + ' Seconds ';
-        PRINT '>> -------------';
+        PRINT 'ERP Location A101 loaded successfully in ' 
+              + CAST(DATEDIFF(second, @start_time, @end_time) AS NVARCHAR) + ' sec.';
+        PRINT '';
 
-
-        --Bulk Insert into ERP PX CAT G1V2
+        -------------------------
+        -- bronze.erp_px_cat_g1v2
+        -------------------------
+        PRINT 'Step 6: Loading ERP PX Category G1V2 Table...';
         SET @start_time = GETDATE();
-        PRINT '>> Truncating Table: bronze.erp_px_cat_g1v2';
-	    TRUNCATE TABLE bronze.erp_px_cat_g1v2;
-	    PRINT '>> Inserting Data Into: bronze.erp_px_cat_g1v2';
+
+        TRUNCATE TABLE bronze.erp_px_cat_g1v2;
 
         BULK INSERT bronze.erp_px_cat_g1v2
         FROM 'C:\Users\kpurn\OneDrive\Documents\Development\SQL\SQL Project\sql-data-warehouse-project\sql-data-warehouse-project\datasets\source_erp\px_cat_g1v2.csv'
         WITH (
             FIRSTROW = 2,
             FIELDTERMINATOR = ',',
-            ROWTERMINATOR = '\n'
+            ROWTERMINATOR = '\n',
+            KEEPNULLS,
+            MAXERRORS = 1000,
+            TABLOCK
         );
-        SET @end_time = GETDATE();
-        PRINT '>> Load Duration: ' + CAST(DATEDIFF(second, @start_time, @end_time) AS NVARCHAR) + ' Seconds ';
-        PRINT '>> -------------';
 
+        SET @end_time = GETDATE();
+        PRINT 'ERP PX Category G1V2 loaded successfully in ' 
+              + CAST(DATEDIFF(second, @start_time, @end_time) AS NVARCHAR) + ' sec.';
+        PRINT '';
+
+        ------------------------------------------------
+        -- COMPLETION SUMMARY
+        ------------------------------------------------
         SET @batch_end_time = GETDATE();
-        PRINT '=========================================='
-		PRINT 'Loading Bronze Layer is Completed';
-        PRINT 'Total Bronze Layer Load Duration: ' + CAST(DATEDIFF(second, @batch_start_time, @batch_end_time) AS NVARCHAR) + ' seconds ';
-		PRINT '=========================================='
+        PRINT '================================================';
+        PRINT 'BRONZE LAYER LOAD COMPLETED SUCCESSFULLY';
+        PRINT 'Total Duration: ' 
+              + CAST(DATEDIFF(second, @batch_start_time, @batch_end_time) AS NVARCHAR) + ' seconds';
+        PRINT 'Completion Time: ' + CONVERT(VARCHAR, @batch_end_time, 120);
+        PRINT '================================================';
 
     END TRY
 
     BEGIN CATCH
-        PRINT 'Error Meaasge: ' + ERROR_MESSAGE();
-
-    END CATCH
-
-
-END
-
-EXEC bronze.load_bronze;
+        PRINT '';
+        PRINT '==========================================';
+        PRINT 'ERROR OCCURRED DURING BRONZE LAYER LOAD';
+        PRINT 'Message   : ' + ERROR_MESSAGE();
+        PRINT 'Number    : ' + CAST(ERROR_NUMBER() AS NVARCHAR);
+        PRINT 'State     : ' + CAST(ERROR_STATE() AS NVARCHAR);
+        PRINT 'Line      : ' + CAST(ERROR_LINE() AS NVARCHAR);
+        PRINT 'Procedure : ' + ISNULL(ERROR_PROCEDURE(), '(ad-hoc)');
+        PRINT '==========================================';
+    END CATCH;
+END;
+GO
